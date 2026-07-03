@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TODO Manager v1.1</title>
+<style>
+:root {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --text: #222222;
+  --sub: #666666;
+  --line: #dddddd;
+  --main: #2563eb;
+  --danger: #dc2626;
+  --done: #888888;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+header {
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  padding: 18px 24px;
+}
+main {
+  max-width: 1100px;
+  margin: 24px auto;
+  padding: 0 16px;
+}
+h1 { margin: 0 0 6px; font-size: 24px; }
+.help { margin: 0; color: var(--sub); font-size: 14px; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+input, select, button, textarea {
+  font: inherit;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+input[type="text"] { min-width: 260px; flex: 1; }
+button {
+  cursor: pointer;
+  background: #fff;
+}
+button.primary {
+  background: var(--main);
+  color: white;
+  border-color: var(--main);
+}
+button.danger {
+  color: var(--danger);
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.status-bar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--sub);
+  font-size: 14px;
+  margin-top: 8px;
+}
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 12px;
+}
+.task-list { list-style: none; padding: 0; margin: 0; }
+.task {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.task:last-child { border-bottom: 0; }
+.task-title { font-weight: 600; }
+.task-title.done { color: var(--done); text-decoration: line-through; }
+.task-meta { margin-top: 4px; color: var(--sub); font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px; }
+.task-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.note {
+  font-size: 13px;
+  color: var(--sub);
+  line-height: 1.6;
+}
+.notice {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+.hidden { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>TODO Manager v1.1</h1>
+  <p class="help">dbフォルダ内のJSONファイルに保存する版です。外部ライブラリ、ネットワーク接続は使いません。</p>
+</header>
+
+<main>
+  <section class="card notice">
+    <strong>保存方式</strong>
+    <div class="note">
+      このHTML単体アプリは、ブラウザの安全制限により、勝手に同じ階層のdbフォルダへ書き込むことはできません。<br>
+      そのため、最初に「dbフォルダを選択」ボタンで、index.html と同じ階層にある db フォルダを指定してください。以後、この画面を開いている間は、その中の <strong>todo-data-v1_1.json</strong> に保存します。
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <button class="primary" onclick="selectDbFolder()">dbフォルダを選択</button>
+      <button onclick="loadFromDb()">dbから読み込み</button>
+      <button onclick="saveToDb()">dbへ保存</button>
+      <button onclick="exportJson()">JSONをダウンロード</button>
+      <label>
+        JSONを取り込み
+        <input type="file" accept="application/json,.json" onchange="importJson(event)" class="hidden">
+      </label>
+    </div>
+    <div class="status-bar">
+      <span id="dbStatus">dbフォルダ未選択</span>
+      <span id="saveStatus">未保存</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <input id="titleInput" type="text" placeholder="やることを入力">
+      <select id="sourceInput" title="発生元">
+        <option value="manual">手入力</option>
+        <option value="mail">メール</option>
+        <option value="chat">チャット</option>
+        <option value="meeting">会議</option>
+        <option value="verbal">口頭</option>
+      </select>
+      <select id="priorityInput" title="優先度">
+        <option value="medium">優先度：中</option>
+        <option value="high">優先度：高</option>
+        <option value="low">優先度：低</option>
+      </select>
+      <input id="dueDateInput" type="date" title="期限">
+      <button class="primary" onclick="addTask()">追加</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <button onclick="setFilter('all')">全件</button>
+      <button onclick="setFilter('inbox')">受信箱</button>
+      <button onclick="setFilter('next')">次にやる</button>
+      <button onclick="setFilter('waiting')">誰か待ち</button>
+      <button onclick="setFilter('done')">完了</button>
+      <input id="searchInput" type="text" placeholder="検索" oninput="render()">
+    </div>
+    <div class="status-bar" id="summary"></div>
+  </section>
+
+  <section class="card">
+    <ul id="taskList" class="task-list"></ul>
+  </section>
+</main>
+
+<script>
+const DB_FILE_NAME = 'todo-data-v1_1.json';
+let dbDirHandle = null;
+let currentFilter = 'all';
+let tasks = [];
+let dirty = false;
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function setDirty(value) {
+  dirty = value;
+  document.getElementById('saveStatus').textContent = value ? '未保存の変更あり' : '保存済み';
+}
+
+function createInitialData() {
+  return {
+    appName: 'TODO Manager',
+    version: '1.1',
+    updatedAt: nowIso(),
+    tasks: []
+  };
+}
+
+function normalizeData(data) {
+  if (!data || !Array.isArray(data.tasks)) {
+    return createInitialData();
+  }
+  data.tasks = data.tasks.map(task => ({
+    id: task.id || crypto.randomUUID(),
+    title: task.title || task.text || '',
+    source: task.source || 'manual',
+    status: task.status || (task.completed ? 'done' : 'inbox'),
+    priority: task.priority || 'medium',
+    dueDate: task.dueDate || '',
+    createdAt: task.createdAt || nowIso(),
+    updatedAt: task.updatedAt || nowIso(),
+    completedAt: task.completedAt || null
+  }));
+  return data;
+}
+
+async function selectDbFolder() {
+  if (!window.showDirectoryPicker) {
+    alert('このブラウザではフォルダ直接保存に対応していません。EdgeまたはChromeで開き、利用できない場合は「JSONをダウンロード」を使ってください。');
+    return;
+  }
+  try {
+    dbDirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    document.getElementById('dbStatus').textContent = `dbフォルダ選択済み：${dbDirHandle.name}`;
+    await loadFromDb();
+  } catch (error) {
+    document.getElementById('dbStatus').textContent = 'dbフォルダ選択をキャンセルしました';
+  }
+}
+
+async function getDbFileHandle(create) {
+  if (!dbDirHandle) {
+    throw new Error('dbフォルダが選択されていません');
+  }
+  return await dbDirHandle.getFileHandle(DB_FILE_NAME, { create });
+}
+
+async function loadFromDb() {
+  try {
+    const fileHandle = await getDbFileHandle(false);
+    const file = await fileHandle.getFile();
+    const text = await file.text();
+    const data = normalizeData(JSON.parse(text || '{}'));
+    tasks = data.tasks;
+    setDirty(false);
+    render();
+  } catch (error) {
+    if (!dbDirHandle) {
+      alert('先にdbフォルダを選択してください。');
+      return;
+    }
+    const data = createInitialData();
+    tasks = data.tasks;
+    await saveToDb();
+    render();
+  }
+}
+
+async function saveToDb() {
+  try {
+    const fileHandle = await getDbFileHandle(true);
+    const writable = await fileHandle.createWritable();
+    const data = {
+      appName: 'TODO Manager',
+      version: '1.1',
+      updatedAt: nowIso(),
+      tasks
+    };
+    await writable.write(JSON.stringify(data, null, 2));
+    await writable.close();
+    setDirty(false);
+    render();
+  } catch (error) {
+    alert('dbフォルダへ保存できませんでした。先にdbフォルダを選択してください。');
+  }
+}
+
+function addTask() {
+  const titleInput = document.getElementById('titleInput');
+  const title = titleInput.value.trim();
+  if (!title) return;
+
+  tasks.push({
+    id: crypto.randomUUID(),
+    title,
+    source: document.getElementById('sourceInput').value,
+    status: 'inbox',
+    priority: document.getElementById('priorityInput').value,
+    dueDate: document.getElementById('dueDateInput').value,
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+    completedAt: null
+  });
+
+  titleInput.value = '';
+  setDirty(true);
+  render();
+}
+
+function updateStatus(id, status) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  task.status = status;
+  task.updatedAt = nowIso();
+  task.completedAt = status === 'done' ? nowIso() : null;
+  setDirty(true);
+  render();
+}
+
+function deleteTask(id) {
+  if (!confirm('削除しますか？')) return;
+  tasks = tasks.filter(t => t.id !== id);
+  setDirty(true);
+  render();
+}
+
+function setFilter(filter) {
+  currentFilter = filter;
+  render();
+}
+
+function label(value, type) {
+  const maps = {
+    source: { manual: '手入力', mail: 'メール', chat: 'チャット', meeting: '会議', verbal: '口頭' },
+    status: { inbox: '受信箱', next: '次にやる', waiting: '誰か待ち', done: '完了' },
+    priority: { high: '高', medium: '中', low: '低' }
+  };
+  return maps[type][value] || value;
+}
+
+function render() {
+  const list = document.getElementById('taskList');
+  const search = document.getElementById('searchInput').value.trim().toLowerCase();
+  list.innerHTML = '';
+
+  let filtered = tasks;
+  if (currentFilter !== 'all') {
+    filtered = filtered.filter(t => t.status === currentFilter);
+  }
+  if (search) {
+    filtered = filtered.filter(t => t.title.toLowerCase().includes(search));
+  }
+
+  filtered.forEach(task => {
+    const li = document.createElement('li');
+    li.className = 'task';
+
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.checked = task.status === 'done';
+    check.addEventListener('change', () => updateStatus(task.id, check.checked ? 'done' : 'inbox'));
+
+    const body = document.createElement('div');
+    const title = document.createElement('div');
+    title.className = 'task-title' + (task.status === 'done' ? ' done' : '');
+    title.textContent = task.title;
+
+    const meta = document.createElement('div');
+    meta.className = 'task-meta';
+    const values = [
+      `状態：${label(task.status, 'status')}`,
+      `発生元：${label(task.source, 'source')}`,
+      `優先度：${label(task.priority, 'priority')}`,
+      task.dueDate ? `期限：${task.dueDate}` : '期限：未設定'
+    ];
+    values.forEach(v => {
+      const span = document.createElement('span');
+      span.className = 'badge';
+      span.textContent = v;
+      meta.appendChild(span);
+    });
+
+    body.appendChild(title);
+    body.appendChild(meta);
+
+    const actions = document.createElement('div');
+    actions.className = 'task-actions';
+    [
+      ['受信箱', 'inbox'],
+      ['次にやる', 'next'],
+      ['誰か待ち', 'waiting'],
+      ['完了', 'done']
+    ].forEach(([text, status]) => {
+      const btn = document.createElement('button');
+      btn.textContent = text;
+      btn.disabled = task.status === status;
+      btn.addEventListener('click', () => updateStatus(task.id, status));
+      actions.appendChild(btn);
+    });
+    const del = document.createElement('button');
+    del.textContent = '削除';
+    del.className = 'danger';
+    del.addEventListener('click', () => deleteTask(task.id));
+    actions.appendChild(del);
+
+    li.appendChild(check);
+    li.appendChild(body);
+    li.appendChild(actions);
+    list.appendChild(li);
+  });
+
+  const counts = {
+    all: tasks.length,
+    inbox: tasks.filter(t => t.status === 'inbox').length,
+    next: tasks.filter(t => t.status === 'next').length,
+    waiting: tasks.filter(t => t.status === 'waiting').length,
+    done: tasks.filter(t => t.status === 'done').length
+  };
+  document.getElementById('summary').textContent =
+    `全件 ${counts.all}件 / 受信箱 ${counts.inbox}件 / 次にやる ${counts.next}件 / 誰か待ち ${counts.waiting}件 / 完了 ${counts.done}件`;
+}
+
+function exportJson() {
+  const data = {
+    appName: 'TODO Manager',
+    version: '1.1',
+    updatedAt: nowIso(),
+    tasks
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = DB_FILE_NAME;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function importJson(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = normalizeData(JSON.parse(reader.result || '{}'));
+      tasks = data.tasks;
+      setDirty(true);
+      render();
+    } catch (error) {
+      alert('JSONファイルを読み込めませんでした。');
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+window.addEventListener('beforeunload', event => {
+  if (!dirty) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
+
+render();
+</script>
+</body>
+</html>
