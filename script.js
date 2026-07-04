@@ -1,4 +1,4 @@
-const DB_FILE_NAME = 'todo-data-v1_2.json';
+const DB_FILE_NAME = 'todo-data.json';
 let dbDirHandle = null;
 let currentFilter = 'all';
 let tasks = [];
