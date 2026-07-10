@@ -1,0 +1,18 @@
+{
+  "appName": "TODO Manager",
+  "version": "1.1",
+  "updatedAt": "2026-07-03T04:30:24.448Z",
+  "tasks": [
+    {
+      "id": "c667a008-69b4-4bbc-a840-db150924ec91",
+      "title": "git for Windowsをインストールする",
+      "source": "manual",
+      "status": "inbox",
+      "priority": "low",
+      "dueDate": "2026-07-03",
+      "createdAt": "2026-07-03T04:29:45.228Z",
+      "updatedAt": "2026-07-03T04:29:45.228Z",
+      "completedAt": null
+    }
+  ]
+}
